@@ -64,6 +64,26 @@ adjust_chapters_with_offset() {
     echo "Adjusted chapter metadata has been saved to $adjusted_metadata_file"
 }
 
+clean_up_metadata_files() {
+  for file in "$@"; do
+    general_metadata_file="${file%.m4a}_general_metadata.txt"
+    adjusted_metadata_file="${file%.m4a}_adjusted_chapters.txt"
+    chapter_metadata_file="${file%.m4a}_chapter_metadata.txt"
+
+    if [ -f "$general_metadata_file" ]; then
+      rm "$general_metadata_file"
+    fi
+
+    if [ -f "$adjusted_metadata_file" ]; then
+      rm "$adjusted_metadata_file"
+    fi
+
+    if [ -f "$chapter_metadata_file" ]; then
+      rm "$chapter_metadata_file"
+    fi
+  done
+}
+
 # Check if at least one m4a file is provided as an argument
 if [ "$#" -eq 0 ]; then
     echo "Please provide at least one .m4a file as an argument."
@@ -102,5 +122,8 @@ for m4a_file in "$@"; do
         echo "Skipping '$m4a_file' (not an .m4a file)"
     fi
 done
+
+echo "cleaning up metadata files"
+clean_up_metadata_files "$@"
 
 echo "Combined metadata has been saved to $combined_metadata_file"
