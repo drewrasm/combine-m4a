@@ -32,6 +32,38 @@ extract_metadata() {
     echo "Chapter metadata has been saved to $chapter_metadata_file"
 }
 
+# Function to adjust chapter metadata with offsets
+adjust_chapters_with_offset() {
+    input_file=$1
+    previous_end=$2
+    chapter_metadata_file="${input_file%.m4a}_chapter_metadata.txt"
+    adjusted_metadata_file="${input_file%.m4a}_adjusted_chapters.txt"
+
+    # Adjust chapter START and END values based on previous_end
+    awk -v previous_end="$previous_end" '
+        BEGIN { OFS="\n"; start_offset = previous_end; inside_chapter = 0 }
+        /\[CHAPTER\]/ {
+            if (inside_chapter) {
+                print ""
+            }
+            inside_chapter = 1
+        }
+        inside_chapter && $0 ~ /START/ { 
+            split($0, arr, "=")
+            start_offset += arr[2]
+            print "START=" start_offset
+        }
+        inside_chapter && $0 ~ /END/ { 
+            split($0, arr, "=")
+            end_offset = arr[2] + start_offset
+            print "END=" end_offset
+        }
+        inside_chapter && $0 !~ /START/ && $0 !~ /END/ { print $0 }
+    ' "$chapter_metadata_file" | sed '/^$/d' > "$adjusted_metadata_file"
+
+    echo "Adjusted chapter metadata has been saved to $adjusted_metadata_file"
+}
+
 # Check if at least one m4a file is provided as an argument
 if [ "$#" -eq 0 ]; then
     echo "Please provide at least one .m4a file as an argument."
@@ -44,6 +76,8 @@ combined_metadata_file="combined_metadata.txt"
 
 # Process each m4a file passed as an argument
 first_file=true
+last_end=0  # Initially no previous chapter's end
+
 for m4a_file in "$@"; do
     if [[ "$m4a_file" == *.m4a ]]; then
         # Extract metadata for the current m4a file
@@ -52,12 +86,18 @@ for m4a_file in "$@"; do
         # If this is the first file, append its general metadata
         if $first_file; then
             first_file=false
-            # Append the general metadata of the first file
+            # Append the general metadata of the first file (without adding an extra [CHAPTER])
             cat "${m4a_file%.m4a}_general_metadata.txt" >> "$combined_metadata_file"
         fi
 
-        # Append the chapter metadata of the current file
-        cat "${m4a_file%.m4a}_chapter_metadata.txt" >> "$combined_metadata_file"
+        # Adjust chapter metadata for subsequent files, offsetting by the previous file's end
+        adjust_chapters_with_offset "$m4a_file" "$last_end"
+
+        # Append the adjusted chapter metadata of the current file to the combined file
+        cat "${m4a_file%.m4a}_adjusted_chapters.txt" >> "$combined_metadata_file"
+
+        # Update the last_end to the end of the last chapter in this file
+        last_end=$(awk '/\[CHAPTER\]/ {inside_chapter=1} inside_chapter && /END/ {split($0, arr, "="); end=arr[2]} END {print end}' "${m4a_file%.m4a}_adjusted_chapters.txt")
     else
         echo "Skipping '$m4a_file' (not an .m4a file)"
     fi
