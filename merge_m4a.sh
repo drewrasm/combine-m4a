@@ -38,11 +38,29 @@ if [ "$#" -eq 0 ]; then
     exit 1
 fi
 
+# Initialize combined metadata file
+combined_metadata_file="combined_metadata.txt"
+> "$combined_metadata_file"  # Clear the file if it already exists
+
 # Process each m4a file passed as an argument
+first_file=true
 for m4a_file in "$@"; do
     if [[ "$m4a_file" == *.m4a ]]; then
+        # Extract metadata for the current m4a file
         extract_metadata "$m4a_file"
+
+        # If this is the first file, append its general metadata
+        if $first_file; then
+            first_file=false
+            # Append the general metadata of the first file
+            cat "${m4a_file%.m4a}_general_metadata.txt" >> "$combined_metadata_file"
+        fi
+
+        # Append the chapter metadata of the current file
+        cat "${m4a_file%.m4a}_chapter_metadata.txt" >> "$combined_metadata_file"
     else
         echo "Skipping '$m4a_file' (not an .m4a file)"
     fi
 done
+
+echo "Combined metadata has been saved to $combined_metadata_file"
